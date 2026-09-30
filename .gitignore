@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+data/
+web/node_modules/
+web/dist/
+web/public/data/
+.DS_Store
