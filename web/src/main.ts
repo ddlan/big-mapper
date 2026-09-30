@@ -6,6 +6,7 @@ import { bandColors, bandMinutes, paint } from "./colors";
 import type { Meta } from "./graph";
 import { latToMercY, lonToMercX, mercXToLon, mercYToLat } from "./mercator";
 import type { Isochrone, Itinerary, RouteParams } from "./router";
+import { percentile, SCORE_SETTINGS, type ScoreDistribution, scoreParams } from "./score";
 import type { WorkerRequest, WorkerResponse } from "./router.worker";
 
 const DEFAULT_START: [number, number] = [-122.4056, 37.7852]; // Powell St
@@ -45,6 +46,8 @@ let iso: Isochrone | null = null;
 let imageUrl: string | null = null;
 let dest: [number, number] | null = parseLatLon(initialUrl.get("to"));
 let periodId = initialUrl.get("when") ?? DEFAULT_PERIOD;
+type Mode = "explore" | "score";
+let mode: Mode = initialUrl.get("mode") === "score" ? "score" : "explore";
 let pathReqId = 0;
 
 function writeUrl() {
@@ -52,6 +55,7 @@ function writeUrl() {
   q.set("from", fmtLatLon(start));
   if (dest) q.set("to", fmtLatLon(dest));
   if (periodId !== DEFAULT_PERIOD) q.set("when", periodId);
+  if (mode === "score") q.set("mode", "score");
   // Commas are safe in query strings; keep them readable.
   history.replaceState(null, "", `${location.pathname}?${q.toString().replace(/%2C/g, ",")}`);
 }
@@ -62,6 +66,7 @@ const worker = new Worker(new URL("./router.worker.ts", import.meta.url), { type
 let busy = false;
 let dirty = false;
 let reqId = 0;
+let inflightMode: Mode = mode;
 
 function requestRoute() {
   if (!meta) return;
@@ -71,6 +76,7 @@ function requestRoute() {
   }
   busy = true;
   dirty = false;
+  inflightMode = mode;
   const msg: WorkerRequest = { type: "route", id: ++reqId, params: currentParams() };
   worker.postMessage(msg);
 }
@@ -92,6 +98,7 @@ worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
     else if (dest) requestPath();
     iso = msg.iso;
     render();
+    if (inflightMode === "score" && mode === "score") showScore(iso.stats.reachableKm2);
     const s = iso.stats;
     statusEl.textContent =
       `${s.stopsReached.toLocaleString()} stops reachable · ` +
@@ -112,6 +119,10 @@ function requestPath() {
 }
 
 function currentParams(): RouteParams {
+  if (mode === "score" && meta) {
+    const period = meta.periods.findIndex((p) => p.id === SCORE_SETTINGS.periodId);
+    return scoreParams(start[0], start[1], period, meta.modeGroups.length);
+  }
   const v = (k: SliderKey) => Number($<HTMLInputElement>(k).value);
   return {
     lon: start[0],
@@ -136,6 +147,50 @@ function buildPeriodSelect(m: Meta) {
     requestRoute();
   });
 }
+
+// --- modes: Explore (free sliders) / Score (fixed settings) -----------------
+
+let scoreDist: ScoreDistribution | null = null;
+let scoreDistLoading: Promise<void> | null = null;
+let lastKm2: number | null = null;
+
+function loadScoreDist() {
+  scoreDistLoading ??= fetch(`${import.meta.env.BASE_URL}data/score-dist.json`)
+    .then((r) => (r.ok ? r.json() : null))
+    .then((d: ScoreDistribution | null) => {
+      scoreDist = d;
+      if (lastKm2 !== null) showScore(lastKm2);
+    })
+    .catch(() => {});
+}
+
+function showScore(km2: number) {
+  lastKm2 = km2;
+  $("score-km2").textContent = km2 >= 100 ? km2.toFixed(0) : km2.toFixed(1);
+  const pctEl = $("score-pct");
+  if (!scoreDist) {
+    pctEl.textContent = scoreDistLoading ? "" : "No reference data (run npm run score-dist)";
+    $("score-bar-fill").style.width = "0";
+    return;
+  }
+  const pct = percentile(scoreDist, km2);
+  $("score-bar-fill").style.width = `${pct}%`;
+  pctEl.textContent = `Better connected than ${Math.floor(pct)}% of the Bay Area`;
+}
+
+function setMode(m: Mode) {
+  mode = m;
+  $("mode-explore").setAttribute("aria-selected", String(m === "explore"));
+  $("mode-score").setAttribute("aria-selected", String(m === "score"));
+  $("explore-controls").hidden = m === "score";
+  $("score-card").hidden = m !== "score";
+  if (m === "score") loadScoreDist();
+  writeUrl();
+  requestRoute();
+}
+
+$("mode-explore").addEventListener("click", () => mode !== "explore" && setMode("explore"));
+$("mode-score").addEventListener("click", () => mode !== "score" && setMode("score"));
 
 // --- controls ---------------------------------------------------------------
 
@@ -336,11 +391,12 @@ function showItinerary(it: Itinerary | null) {
 let mapReady = false;
 
 function render() {
-  if (!iso || !mapReady) return;
+  if (!iso) return;
   const maxMinutes = iso.maxSeconds / 60;
   const band = bandMinutes(maxMinutes);
   const colors = bandColors(Math.ceil(maxMinutes / band));
   renderLegend(maxMinutes, colors, band);
+  if (!mapReady) return;
 
   const canvas = document.createElement("canvas");
   canvas.width = iso.width;
@@ -393,3 +449,5 @@ map.on("mousemove", (e) => {
   tooltip.style.transform = `translate(${e.point.x + 14}px, ${e.point.y + 14}px)`;
 });
 map.on("mouseout", () => (tooltip.hidden = true));
+
+setMode(mode);

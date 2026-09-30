@@ -48,6 +48,7 @@ cd pipeline
 API_511_KEY=yourkey ../.venv/bin/python download.py   # ~600 MB OSM download
 ../.venv/bin/python build_graph.py --list-agencies     # review include/exclude decisions
 ../.venv/bin/python build_graph.py
+cd ../web && npm run score-dist                        # reference distribution for Score mode (~3 min)
 ```
 
 You can also drop any GTFS zips into `data/raw/gtfs/` or pass `--gtfs a.zip b.zip` and `--osm file.osm.pbf`.
@@ -64,6 +65,13 @@ The URL holds the state (`?from=lat,lon&to=lat,lon&when=period`), so links are s
 Drag the black pin to set the origin. Click anywhere to set a destination: the route is drawn on
 the map (transit legs follow GTFS shapes) with an itinerary in the side panel. "Set as start"
 moves the origin there.
+
+## Score mode
+
+The Score tab rates the pin's connectivity: km² reachable in 45 min under fixed settings (weekday
+rush, 5 min transfer penalty, no initial wait, 5 km/h, all modes; see `web/src/score.ts`), plus a
+percentile versus 2,000 randomly sampled street locations (`web/scripts/score-distribution.ts`,
+output `public/data/score-dist.json`). Rerun `npm run score-dist` after rebuilding the graph.
 
 ## How routing works
 

@@ -29,7 +29,7 @@ export interface Isochrone {
   /** Seconds per cell, row-major from the top; Infinity where unreachable. */
   times: Float32Array;
   maxSeconds: number;
-  stats: { dijkstraMs: number; rasterMs: number; stopsReached: number; seeds: number };
+  stats: { dijkstraMs: number; rasterMs: number; stopsReached: number; seeds: number; reachableKm2: number };
 }
 
 export interface WalkLeg {
@@ -401,9 +401,14 @@ export class Router {
     }
     const t2 = performance.now();
 
+    // Reachable area: painted cells times ground cell area (at the origin's latitude).
+    let painted = 0;
+    for (let k = 0; k < times.length; k++) if (times[k] <= maxSeconds) painted++;
+    const reachableKm2 = (painted * cellM * cellM) / 1e6;
+
     return {
       width, height, x0: minX, y0: minY, cell, times, maxSeconds,
-      stats: { dijkstraMs: t1 - t0, rasterMs: t2 - t1, stopsReached, seeds },
+      stats: { dijkstraMs: t1 - t0, rasterMs: t2 - t1, stopsReached, seeds, reachableKm2 },
     };
   }
 
