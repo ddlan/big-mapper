@@ -319,10 +319,28 @@ map.on("style.load", () => {
 const marker = new maplibregl.Marker({ draggable: true, color: "#1f2937" }).setLngLat(start).addTo(map);
 marker.on("dragend", () => {
   const ll = marker.getLngLat();
+  if (isWater([ll.lng, ll.lat])) {
+    // Travel time from the middle of the bay is meaningless; snap back.
+    marker.setLngLat(start);
+    flashStatus("That's in the water. Pick a starting spot on land.");
+    return;
+  }
   start = [ll.lng, ll.lat];
   writeUrl();
   requestRoute();
 });
+
+/** Whether a point is water on the rendered basemap. */
+function isWater([lon, lat]: [number, number]): boolean {
+  if (!mapReady || !map.getLayer("water")) return false;
+  return map.queryRenderedFeatures(map.project([lon, lat]), { layers: ["water"] }).length > 0;
+}
+
+function flashStatus(text: string) {
+  statusEl.textContent = text;
+  statusEl.classList.add("error");
+  setTimeout(() => statusEl.classList.remove("error"), 3000);
+}
 const destMarker = new maplibregl.Marker({ color: "#2563eb" });
 if (dest) destMarker.setLngLat(dest).addTo(map);
 map.on("click", (e) => {
@@ -434,6 +452,10 @@ function showItinerary(it: Itinerary | null) {
   }
   $("it-start").onclick = () => {
     const d = dest!;
+    if (isWater(d)) {
+      flashStatus("That's in the water. Pick a starting spot on land.");
+      return;
+    }
     clearDestination();
     setStart(d);
   };
@@ -512,6 +534,7 @@ const game = new DailyGame(map, {
     requestRoute();
   },
   hideIsochrone,
+  isWater,
 }, initialUrl.get("day") ?? undefined);
 
 setMode(mode);

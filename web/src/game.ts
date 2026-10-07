@@ -15,6 +15,8 @@ export interface GameHooks {
   show(lon: number, lat: number): void;
   /** Hide the isochrone (blind until the first guess). */
   hideIsochrone(): void;
+  /** Whether a spot is water on the basemap (guesses must be on land). */
+  isWater(p: [number, number]): boolean;
 }
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -41,6 +43,7 @@ export class DailyGame {
   private twist: Twist | null = null;
   private guesses: Guess[] = [];
   private pending: [number, number] | null = null;
+  private pendingInWater = false;
   /** Guess awaiting its score from the router. */
   private scoring: [number, number] | null = null;
   private active = false;
@@ -153,18 +156,23 @@ export class DailyGame {
     return pctOfBest(g.km2, this.puzzle!);
   }
 
+  private validPending() {
+    return !!this.pending && this.insideArea(this.pending) && !this.pendingInWater;
+  }
+
   private insideArea(p: [number, number]) {
     return metersBetween(p, this.puzzle!.center) <= this.puzzle!.radiusM;
   }
 
   private setPending(p: [number, number]) {
     this.pending = p;
+    this.pendingInWater = this.hooks.isWater(p);
     this.pendingMarker.setLngLat(p).addTo(this.map);
     this.render();
   }
 
   private submitGuess() {
-    if (!this.pending || !this.insideArea(this.pending) || this.scoring || this.done) return;
+    if (!this.pending || !this.validPending() || this.scoring || this.done) return;
     this.scoring = this.pending;
     this.render();
     this.hooks.show(this.pending[0], this.pending[1]);
@@ -194,9 +202,11 @@ export class DailyGame {
     } else if (this.scoring) {
       action = `<button class="primary" disabled>Scoring…</button>`;
     } else {
-      const ok = this.pending && this.insideArea(this.pending);
+      const ok = this.validPending();
       const hint = !this.pending ? "Click inside the circle to place a pin."
-        : ok ? "Drag the pin to adjust, then lock it in." : "That's outside the circle.";
+        : !this.insideArea(this.pending) ? "That's outside the circle."
+        : this.pendingInWater ? "That's in the water. Pick a spot on land."
+        : "Drag the pin to adjust, then lock it in.";
       action = `<button id="daily-guess" class="primary" ${ok ? "" : "disabled"}>Lock in guess ${this.guesses.length + 1}</button>` +
         `<div class="note">${hint}</div>`;
     }
@@ -311,7 +321,8 @@ export class DailyGame {
   // --- persistence (per-browser convenience; the game works without it) -------
 
   private storageKey() {
-    return `bigmapper:daily:${this.day}`;
+    // Include the area so regenerated puzzles don't inherit old guesses.
+    return `bigmapper:daily:${this.day}:${this.puzzle?.name ?? ""}`;
   }
 
   private load(): Guess[] {
