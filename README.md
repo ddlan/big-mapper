@@ -49,6 +49,7 @@ API_511_KEY=yourkey ../.venv/bin/python download.py   # ~600 MB OSM download
 ../.venv/bin/python build_graph.py --list-agencies     # review include/exclude decisions
 ../.venv/bin/python build_graph.py
 cd ../web && npm run score-dist                        # reference distribution for Score mode (~3 min)
+npm run daily -- --days 60                             # daily puzzles (~10 s/day)
 ```
 
 You can also drop any GTFS zips into `data/raw/gtfs/` or pass `--gtfs a.zip b.zip` and `--osm file.osm.pbf`.
@@ -72,6 +73,19 @@ The Score tab rates the pin's connectivity: km² reachable in 45 min under fixed
 rush, 5 min transfer penalty, no initial wait, 5 km/h, all modes; see `web/src/score.ts`), plus a
 percentile versus 2,000 randomly sampled street locations (`web/scripts/score-distribution.ts`,
 output `public/data/score-dist.json`). Rerun `npm run score-dist` after rebuilding the graph.
+
+## Daily mode
+
+A Wordle-style game. Each day has a 1 km play area and a twist to the Score settings (rail strike,
+bus only, late night, Saturday, quick trip, long haul, one-seat ride, sore feet, ...; see
+`web/src/daily.ts`). The map stays hidden until you lock in a guess; you get 3 guesses, scored as a
+% of the area's best spot, then the best spot and a heatmap of the area are revealed, with a
+shareable emoji result. Guesses are kept in localStorage per day.
+
+`npm run daily` (`web/scripts/daily-puzzles.ts`) picks each day's twist (every twist once per
+cycle), tries random areas until one has real transit and a meaningful gap between a typical and
+the best spot, and scores a 150 m grid over the area. Output: `public/data/daily.json`, merged by
+date so extending the range keeps earlier days. `?mode=daily&day=YYYY-MM-DD` opens another day.
 
 ## How routing works
 

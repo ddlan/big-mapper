@@ -412,6 +412,13 @@ export class Router {
     };
   }
 
+  /** Meters to the nearest street node, or Infinity if none within `maxM`. */
+  distanceToStreet(lon: number, lat: number, maxM: number): number {
+    let best = Infinity;
+    for (const { dist } of this.index.near(lon, lat, maxM)) if (dist < best) best = dist;
+    return best <= maxM ? best : Infinity;
+  }
+
   setShapes(shapes: HopShapes) {
     this.shapes = shapes;
   }

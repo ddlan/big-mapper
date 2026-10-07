@@ -140,6 +140,130 @@ output {
   font-weight: 600;
 }
 
+#daily-card {
+  margin-bottom: 12px;
+}
+
+.daily-head {
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+
+.twist {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  background: #f3f4f6;
+  border-radius: 8px;
+}
+
+.twist-emoji {
+  font-size: 24px;
+}
+
+.twist small,
+.guess small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.daily-goal {
+  margin: 0 0 8px;
+}
+
+.guesses {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+}
+
+.guess {
+  display: grid;
+  grid-template-columns: 26px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 0;
+}
+
+.guess[data-i] {
+  cursor: pointer;
+}
+
+.guess.empty {
+  color: var(--muted);
+}
+
+.tile {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  background: #e5e7eb;
+  color: #fff;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+button.primary {
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button.primary:disabled {
+  background: #9ca3af;
+  cursor: default;
+}
+
+.daily-result {
+  text-align: center;
+}
+
+.daily-final {
+  font-size: 32px;
+  font-weight: 800;
+}
+
+#daily-share-msg {
+  white-space: pre-line;
+  margin-top: 6px;
+}
+
+.note.warn {
+  color: #b45309;
+}
+
+.guess-marker {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  color: #fff;
+  font-weight: 700;
+  font-size: 12px;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.35);
+}
+
+.best-marker {
+  color: #facc15;
+  font-size: 30px;
+  line-height: 1;
+  text-shadow: 0 0 3px #000, 0 0 1px #000;
+}
+
 fieldset {
   border: 1px solid var(--border);
   border-radius: 6px;

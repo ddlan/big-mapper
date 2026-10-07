@@ -3,6 +3,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import "./style.css";
 
 import { bandColors, bandMinutes, paint } from "./colors";
+import { DailyGame } from "./game";
 import type { Meta } from "./graph";
 import { latToMercY, lonToMercX, mercXToLon, mercYToLat } from "./mercator";
 import type { Isochrone, Itinerary, RouteParams } from "./router";
@@ -22,6 +23,11 @@ const FORMAT: Record<SliderKey, (v: number) => string> = {
 };
 
 const DEFAULT_PERIOD = "rush";
+const SUBTITLES: Record<"explore" | "score" | "daily", string> = {
+  explore: "How far can transit take you? Drag the black pin to set the start; click anywhere to see the route there.",
+  score: "How well connected is this spot? Drag the black pin to score it.",
+  daily: "A new transit puzzle every day.",
+};
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const statusEl = $("status");
@@ -46,12 +52,22 @@ let iso: Isochrone | null = null;
 let imageUrl: string | null = null;
 let dest: [number, number] | null = parseLatLon(initialUrl.get("to"));
 let periodId = initialUrl.get("when") ?? DEFAULT_PERIOD;
-type Mode = "explore" | "score";
-let mode: Mode = initialUrl.get("mode") === "score" ? "score" : "explore";
+type Mode = "explore" | "score" | "daily";
+const urlMode = initialUrl.get("mode");
+let mode: Mode = urlMode === "score" || urlMode === "daily" ? urlMode : "explore";
+/** Daily mode shows nothing until the game asks to route from a spot. */
+let dailyView: [number, number] | null = null;
 let pathReqId = 0;
 
 function writeUrl() {
   const q = new URLSearchParams();
+  if (mode === "daily") {
+    // Don't leak guess locations into shareable URLs.
+    q.set("mode", "daily");
+    if (initialUrl.get("day")) q.set("day", initialUrl.get("day")!);
+    history.replaceState(null, "", `${location.pathname}?${q}`);
+    return;
+  }
   q.set("from", fmtLatLon(start));
   if (dest) q.set("to", fmtLatLon(dest));
   if (periodId !== DEFAULT_PERIOD) q.set("when", periodId);
@@ -67,9 +83,11 @@ let busy = false;
 let dirty = false;
 let reqId = 0;
 let inflightMode: Mode = mode;
+let inflightStart: [number, number] = start;
 
 function requestRoute() {
   if (!meta) return;
+  if (mode === "daily" && (!dailyView || !game.params(0, 0))) return;
   if (busy) {
     dirty = true;
     return;
@@ -77,6 +95,7 @@ function requestRoute() {
   busy = true;
   dirty = false;
   inflightMode = mode;
+  inflightStart = mode === "daily" ? dailyView! : start;
   const msg: WorkerRequest = { type: "route", id: ++reqId, params: currentParams() };
   worker.postMessage(msg);
 }
@@ -90,15 +109,17 @@ worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
     meta = msg.meta;
     buildModeToggles(meta);
     buildPeriodSelect(meta);
+    if (mode === "daily") game.enter(meta);
     statusEl.textContent = `Loaded ${msg.nodeCount.toLocaleString()} nodes, ${meta.agencies.length} agencies.`;
     requestRoute();
   } else if (msg.type === "result") {
     busy = false;
     if (dirty) requestRoute();
-    else if (dest) requestPath();
+    else if (dest && mode !== "daily") requestPath();
     iso = msg.iso;
     render();
     if (inflightMode === "score" && mode === "score") showScore(iso.stats.reachableKm2);
+    if (inflightMode === "daily" && mode === "daily") game.onRouted(inflightStart[0], inflightStart[1], iso.stats.reachableKm2);
     const s = iso.stats;
     statusEl.textContent =
       `${s.stopsReached.toLocaleString()} stops reachable · ` +
@@ -119,6 +140,7 @@ function requestPath() {
 }
 
 function currentParams(): RouteParams {
+  if (mode === "daily" && dailyView) return game.params(dailyView[0], dailyView[1])!;
   if (mode === "score" && meta) {
     const period = meta.periods.findIndex((p) => p.id === SCORE_SETTINGS.periodId);
     return scoreParams(start[0], start[1], period, meta.modeGroups.length);
@@ -179,18 +201,46 @@ function showScore(km2: number) {
 }
 
 function setMode(m: Mode) {
+  const prev = mode;
   mode = m;
-  $("mode-explore").setAttribute("aria-selected", String(m === "explore"));
-  $("mode-score").setAttribute("aria-selected", String(m === "score"));
-  $("explore-controls").hidden = m === "score";
+  for (const k of ["explore", "score", "daily"] as const) $(`mode-${k}`).setAttribute("aria-selected", String(m === k));
+  $("explore-controls").hidden = m !== "explore";
   $("score-card").hidden = m !== "score";
   if (m === "score") loadScoreDist();
+  $("subtitle").textContent = SUBTITLES[m];
+
+  if (m === "daily") {
+    clearDestination();
+    marker.remove();
+    dailyView = null;
+    hideIsochrone();
+    if (meta) game.enter(meta);
+  } else {
+    if (prev === "daily") {
+      game.leave();
+      marker.setLngLat(start).addTo(map);
+      map.easeTo({ center: start, zoom: 11.5, duration: 0 });
+    }
+    setIsoVisible(true);
+  }
   writeUrl();
   requestRoute();
 }
 
-$("mode-explore").addEventListener("click", () => mode !== "explore" && setMode("explore"));
-$("mode-score").addEventListener("click", () => mode !== "score" && setMode("score"));
+for (const k of ["explore", "score", "daily"] as const) {
+  $(`mode-${k}`).addEventListener("click", () => mode !== k && setMode(k));
+}
+
+function hideIsochrone() {
+  iso = null;
+  $("legend").innerHTML = "";
+  tooltip.hidden = true;
+  setIsoVisible(false);
+}
+
+function setIsoVisible(visible: boolean) {
+  if (map.getLayer("iso")) map.setLayoutProperty("iso", "visibility", visible ? "visible" : "none");
+}
 
 // --- controls ---------------------------------------------------------------
 
@@ -276,6 +326,10 @@ marker.on("dragend", () => {
 const destMarker = new maplibregl.Marker({ color: "#2563eb" });
 if (dest) destMarker.setLngLat(dest).addTo(map);
 map.on("click", (e) => {
+  if (mode === "daily") {
+    game.onMapClick([e.lngLat.lng, e.lngLat.lat]);
+    return;
+  }
   dest = [e.lngLat.lng, e.lngLat.lat];
   destMarker.setLngLat(e.lngLat).addTo(map);
   writeUrl();
@@ -412,6 +466,7 @@ function render() {
 
   canvas.toBlob((blob) => {
     if (!blob) return;
+    setIsoVisible(true);
     const url = URL.createObjectURL(blob);
     const src = map.getSource("iso") as maplibregl.ImageSource | undefined;
     if (src) {
@@ -432,6 +487,7 @@ function render() {
 map.on("load", () => {
   mapReady = true;
   addRouteLayers();
+  game.onMapLoad();
   render();
 });
 
@@ -449,5 +505,13 @@ map.on("mousemove", (e) => {
   tooltip.style.transform = `translate(${e.point.x + 14}px, ${e.point.y + 14}px)`;
 });
 map.on("mouseout", () => (tooltip.hidden = true));
+
+const game = new DailyGame(map, {
+  show(lon, lat) {
+    dailyView = [lon, lat];
+    requestRoute();
+  },
+  hideIsochrone,
+}, initialUrl.get("day") ?? undefined);
 
 setMode(mode);

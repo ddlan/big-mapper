@@ -9,11 +9,12 @@
     <div id="map"></div>
     <aside id="panel">
       <h1>Big Mapper</h1>
-      <p class="sub">How far can transit take you? Drag the black pin to set the start; click anywhere to see the route there.</p>
+      <p class="sub" id="subtitle">How far can transit take you? Drag the black pin to set the start; click anywhere to see the route there.</p>
 
       <div class="mode-switch" role="tablist">
         <button id="mode-explore" role="tab">Explore</button>
         <button id="mode-score" role="tab">Score</button>
+        <button id="mode-daily" role="tab">Daily</button>
       </div>
 
       <section id="score-card" hidden>
@@ -24,6 +25,8 @@
         <p class="note">Fixed settings so every spot is judged the same: 5 min transfer penalty, no initial wait,
           5 km/h walking, all modes. Percentile is versus randomly sampled Bay Area street locations.</p>
       </section>
+
+      <section id="daily-card" hidden><p class="note">Loading today's puzzle…</p></section>
 
       <div id="explore-controls">
       <label class="row">
