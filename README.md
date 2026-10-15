@@ -68,6 +68,13 @@ Drag the black pin to set the origin. Click anywhere to set a destination: the r
 the map (transit legs follow GTFS shapes) with an itinerary in the side panel. "Set as start"
 moves the origin there.
 
+## Deploy
+
+Live at https://ddlan.github.io/big-mapper/. `npm run deploy` (in `web/`) builds with base
+`/big-mapper/` and publishes `dist/`, generated data included, to the `gh-pages` branch
+(`web/scripts/deploy.sh`). Rerun it after regenerating data; daily puzzles must be extended
+(`npm run daily -- --days 60`) before the last generated date.
+
 ## Score mode
 
 The Score tab rates the pin's connectivity: km² reachable in 45 min under fixed settings (weekday
