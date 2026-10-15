@@ -176,4 +176,5 @@ for (let i = 0; i < days; i++) {
     puzzles: [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date)),
   } satisfies PuzzleFile));
 }
-console.log(`Wrote ${byDate.size} puzzles to ${outPath} in ${((performance.now() - t0) / 1000).toFixed(0)}s`);
+console.log(`Wrote ${byDate.size} puzzles to ${outPath} in ${((performance.now() - t0) / 1000).toFixed(0)}s ` +
+  `(water tiles: ${water.stats.fetched} downloaded, ${water.stats.cached} from cache)`);

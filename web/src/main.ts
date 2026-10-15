@@ -121,6 +121,7 @@ worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
     if (inflightMode === "score" && mode === "score") showScore(iso.stats.reachableKm2);
     if (inflightMode === "daily" && mode === "daily") game.onRouted(inflightStart[0], inflightStart[1], iso.stats.reachableKm2);
     const s = iso.stats;
+    clearFlash();
     statusEl.textContent =
       `${s.stopsReached.toLocaleString()} stops reachable · ` +
       `routing ${s.dijkstraMs.toFixed(0)} ms, raster ${s.rasterMs.toFixed(0)} ms`;
@@ -336,14 +337,26 @@ function isWater([lon, lat]: [number, number]): boolean {
   return map.queryRenderedFeatures(map.project([lon, lat]), { layers: ["water"] }).length > 0;
 }
 
+/** Status text a flash message replaced; restored when the user moves on. */
+let statusBeforeFlash: string | null = null;
+
 function flashStatus(text: string) {
+  statusBeforeFlash ??= statusEl.textContent;
   statusEl.textContent = text;
   statusEl.classList.add("error");
-  setTimeout(() => statusEl.classList.remove("error"), 3000);
+}
+
+function clearFlash() {
+  if (statusBeforeFlash === null) return;
+  statusEl.textContent = statusBeforeFlash;
+  statusEl.classList.remove("error");
+  statusBeforeFlash = null;
 }
 const destMarker = new maplibregl.Marker({ color: "#2563eb" });
 if (dest) destMarker.setLngLat(dest).addTo(map);
+marker.on("dragstart", clearFlash);
 map.on("click", (e) => {
+  clearFlash();
   if (mode === "daily") {
     game.onMapClick([e.lngLat.lng, e.lngLat.lat]);
     return;

@@ -1,17 +1,25 @@
 // Point-in-water lookups against the same OpenFreeMap vector tiles the app's
 // basemap draws, so the generator and the browser agree on what's water.
+// Tiles are cached in data/raw/tiles/, so only areas not seen before need network.
+
+import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { VectorTile } from "@mapbox/vector-tile";
 import { PbfReader } from "pbf";
 
 const TILEJSON = "https://tiles.openfreemap.org/planet";
 const Z = 14;
+const CACHE_DIR = fileURLToPath(new URL("../../data/raw/tiles/", import.meta.url));
 
 type Ring = { x: number; y: number }[];
 
 export class WaterIndex {
   private template: string | null = null;
   private tiles = new Map<string, Promise<{ extent: number; polygons: Ring[][] }>>();
+  /** Tiles fetched over the network vs. read from the disk cache, for logging. */
+  readonly stats = { fetched: 0, cached: 0 };
 
   private async tileUrl(x: number, y: number) {
     if (!this.template) {
@@ -26,9 +34,7 @@ export class WaterIndex {
     let p = this.tiles.get(key);
     if (!p) {
       p = (async () => {
-        const res = await fetch(await this.tileUrl(x, y), { headers: { "User-Agent": "big-mapper/0.1" } });
-        if (!res.ok) throw new Error(`tile ${key}: HTTP ${res.status}`);
-        const tile = new VectorTile(new PbfReader(new Uint8Array(await res.arrayBuffer())));
+        const tile = new VectorTile(new PbfReader(await this.tileBytes(x, y)));
         const layer = tile.layers.water;
         const polygons: Ring[][] = [];
         let extent = 4096;
@@ -45,6 +51,21 @@ export class WaterIndex {
       this.tiles.set(key, p);
     }
     return p;
+  }
+
+  private async tileBytes(x: number, y: number): Promise<Uint8Array> {
+    const path = `${CACHE_DIR}${Z}/${x}/${y}.pbf`;
+    if (existsSync(path)) {
+      this.stats.cached++;
+      return readFileSync(path);
+    }
+    const res = await fetch(await this.tileUrl(x, y), { headers: { "User-Agent": "big-mapper/0.1" } });
+    if (!res.ok) throw new Error(`tile ${Z}/${x}/${y}: HTTP ${res.status}`);
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, bytes);
+    this.stats.fetched++;
+    return bytes;
   }
 
   async isWater(lon: number, lat: number): Promise<boolean> {

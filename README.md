@@ -50,7 +50,7 @@ API_511_KEY=yourkey ../.venv/bin/python download.py   # ~600 MB OSM download
 ../.venv/bin/python build_graph.py
 cd ../web && npm run score-dist                        # reference distribution for Score mode (~3 min)
 cd ../pipeline && ../.venv/bin/python places.py        # neighbourhood names for daily puzzles (~20 s)
-cd ../web && npm run daily -- --days 60 --force        # daily puzzles (~10 s/day, needs network for water tiles)
+cd ../web && npm run daily -- --days 60 --force        # daily puzzles (~10 s/day; water tiles cached in data/raw/tiles)
 ```
 
 You can also drop any GTFS zips into `data/raw/gtfs/` or pass `--gtfs a.zip b.zip` and `--osm file.osm.pbf`.
@@ -88,7 +88,7 @@ cycle, no repeats within 3 days) and centers the area on a named OSM neighbourho
 (`pipeline/places.py`), weighted by nearby transit stops and never within 2.5 km of the previous two
 weeks' areas. It keeps an area only if it has real transit and a meaningful gap between a typical
 and the best spot, and scores a 150 m grid over it. Grid points in water (checked against the same
-OpenFreeMap tiles as the basemap) are skipped, and the app rejects guesses and start pins in water. Output: `public/data/daily.json`, merged by
+OpenFreeMap tiles as the basemap, cached in `data/raw/tiles/` so only new areas need network) are skipped, and the app rejects guesses and start pins in water. Output: `public/data/daily.json`, merged by
 date so extending the range keeps earlier days. `?mode=daily&day=YYYY-MM-DD` opens another day.
 
 ## How routing works
