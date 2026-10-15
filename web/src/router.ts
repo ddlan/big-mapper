@@ -343,6 +343,15 @@ export class Router {
       if (y < minY) minY = y;
       if (y > maxY) maxY = y;
     }
+    if (reached.length === 0) {
+      // Nothing within the limit (e.g. an origin far out in the bay): an empty
+      // one-cell grid instead of NaN bounds.
+      return {
+        width: 1, height: 1, x0: lonToMercX(p.lon), y0: latToMercY(p.lat), cell: 1e-9,
+        times: new Float32Array([Infinity]), maxSeconds,
+        stats: { dijkstraMs: t1 - t0, rasterMs: 0, stopsReached: 0, seeds, reachableKm2: 0 },
+      };
+    }
     const pad = SPLAT_RADIUS_M / mPerUnit;
     minX -= pad; minY -= pad; maxX += pad; maxY += pad;
 

@@ -5,6 +5,7 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { gunzipSync } from "node:zlib";
 
 import { decodeGraph, type Meta } from "../src/graph";
 import { Router } from "../src/router";
@@ -15,7 +16,7 @@ const argIdx = process.argv.indexOf("--samples");
 const samples = argIdx > 0 ? Number(process.argv[argIdx + 1]) : 2000;
 
 const meta: Meta = JSON.parse(readFileSync(dataDir + "meta.json", "utf8"));
-const buf = readFileSync(dataDir + "graph.bin");
+const buf = gunzipSync(readFileSync(dataDir + "graph.bin.gz"));
 const graph = decodeGraph(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
 const router = new Router(graph, meta);
 const period = meta.periods.findIndex((p) => p.id === SCORE_SETTINGS.periodId);

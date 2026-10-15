@@ -8,6 +8,7 @@
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { gunzipSync } from "node:zlib";
 
 import { EPOCH, TWISTS, dailyParams, dayNumber, metersBetween, type Puzzle, type PuzzleFile } from "../src/daily";
 import { decodeGraph, type Meta } from "../src/graph";
@@ -34,7 +35,7 @@ const days = Number(arg("days", "30"));
 const force = process.argv.includes("--force");
 
 const meta: Meta = JSON.parse(readFileSync(dataDir + "meta.json", "utf8"));
-const buf = readFileSync(dataDir + "graph.bin");
+const buf = gunzipSync(readFileSync(dataDir + "graph.bin.gz"));
 const g = decodeGraph(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
 const router = new Router(g, meta);
 const water = new WaterIndex();

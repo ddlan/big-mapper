@@ -19,7 +19,7 @@ Dijkstra over it on each click.
 ## Layout
 
 ```
-pipeline/            Python: GTFS + OSM -> web/public/data/{graph.bin,meta.json,shapes.bin}
+pipeline/            Python: GTFS + OSM -> web/public/data/{graph.bin.gz,meta.json,shapes.bin}
   config.py          Bay Area polygon, agency overrides, street filters
   download.py        fetch 511 regional GTFS + Geofabrik NorCal OSM
   transit.py         GTFS -> fastest hop per (route, stop, next stop)
