@@ -8,13 +8,15 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "score-dist": "tsx scripts/score-distribution.ts",
-    "daily": "tsx scripts/daily-puzzles.ts"
+    "daily": "tsx scripts/daily-puzzles.ts",
+    "deploy": "npm run build && gh-pages -d dist --nojekyll"
   },
   "dependencies": {
     "maplibre-gl": "^6.11.2"
   },
   "devDependencies": {
     "@mapbox/vector-tile": "^3.0.0",
+    "gh-pages": "^6.3.0",
     "pbf": "^5.1.2",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",

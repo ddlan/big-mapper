@@ -1,5 +1,8 @@
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+// MapLibre 6 finds its tile worker next to its own module file, which doesn't
+// exist once bundled; have Vite bundle the worker and tell MapLibre where it is.
+import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "./style.css";
 
 import { bandColors, bandMinutes, paint } from "./colors";
@@ -287,6 +290,7 @@ function renderLegend(maxMinutes: number, colors: [number, number, number][], ba
 
 // --- map --------------------------------------------------------------------
 
+maplibregl.setWorkerUrl(maplibreWorkerUrl);
 const map = new maplibregl.Map({
   container: "map",
   style: "https://tiles.openfreemap.org/styles/positron",
