@@ -235,6 +235,32 @@ button.primary:disabled {
   font-weight: 800;
 }
 
+.heat-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 10px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.heat-legend i {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+}
+
+button.link {
+  margin: 6px 0 10px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
 #daily-share-msg {
   white-space: pre-line;
   margin-top: 6px;
@@ -247,21 +273,22 @@ button.primary:disabled {
 .guess-marker {
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
-  border: 2px solid #fff;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
+  /* Neutral so it reads on every part of the heatmap and isochrone; the score
+     color lives in the guess list instead. */
+  background: rgb(31 41 55 / 0.82);
   color: #fff;
   font-weight: 700;
-  font-size: 12px;
-  box-shadow: 0 1px 4px rgb(0 0 0 / 0.35);
+  font-size: 11px;
 }
 
 .best-marker {
-  color: #facc15;
-  font-size: 30px;
+  color: #f5c542;
+  font-size: 28px;
   line-height: 1;
-  text-shadow: 0 0 3px #000, 0 0 1px #000;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 0 1px rgb(120 80 0 / 0.6);
 }
 
 fieldset {

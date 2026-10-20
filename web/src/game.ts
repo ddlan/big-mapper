@@ -8,6 +8,7 @@ import {
   type Puzzle, type PuzzleFile, tile, twistById, type Twist,
 } from "./daily";
 import type { Meta } from "./graph";
+import { HEATMAP_GRADIENT_CSS, renderHeatmap } from "./heatmap";
 import type { RouteParams } from "./router";
 
 export interface GameHooks {
@@ -20,7 +21,8 @@ export interface GameHooks {
 }
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
-const TILE_COLORS: Record<string, string> = { "🟩": "#16a34a", "🟨": "#eab308", "🟧": "#f97316", "🟥": "#dc2626" };
+// Muted to sit with the heatmap's ramp; the share text keeps the emoji tiles.
+const TILE_COLORS: Record<string, string> = { "🟩": "#4f9d78", "🟨": "#cfa74f", "🟧": "#d38758", "🟥": "#c0675b" };
 
 function circlePolygon(center: [number, number], radiusM: number): [number, number][] {
   const k = 111_195;
@@ -51,6 +53,8 @@ export class DailyGame {
   private pendingMarker: maplibregl.Marker;
   private bestMarker: maplibregl.Marker;
   private layersAdded = false;
+  /** After the game: the area heatmap, or (false) a guess's isochrone the player clicked. */
+  private heatShown = true;
 
   constructor(
     private map: maplibregl.Map,
@@ -106,11 +110,12 @@ export class DailyGame {
       [[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]],
       { padding: narrow ? 30 : { top: 40, bottom: 40, left: 320, right: 40 }, duration: 0 },
     );
+    this.heatShown = true;
     this.render();
     this.redrawGuesses();
     const last = this.guesses.at(-1);
-    if (last) this.hooks.show(last.lon, last.lat);
-    else this.hooks.hideIsochrone();
+    if (this.done || !last) this.hooks.hideIsochrone();
+    else this.hooks.show(last.lon, last.lat);
   }
 
   leave() {
@@ -144,6 +149,11 @@ export class DailyGame {
     this.save();
     this.pending = null;
     this.pendingMarker.remove();
+    if (this.done) {
+      // Swap the last guess's isochrone for the area heatmap.
+      this.heatShown = true;
+      this.hooks.hideIsochrone();
+    }
     this.redrawGuesses();
     this.render();
   }
@@ -196,8 +206,12 @@ export class DailyGame {
     let action = "";
     if (this.done) {
       const best = Math.max(...this.guesses.map((g) => this.pct(g)));
+      const legend = this.heatShown
+        ? `<div class="heat-legend"><span>worse</span><i style="background:${HEATMAP_GRADIENT_CSS}"></i><span>best ★</span></div>`
+        : `<button id="daily-heat" class="link">Show the area's heatmap</button>`;
       action = `<div class="daily-result"><div class="daily-final">${best.toFixed(0)}%</div>` +
         `<div class="note">Best spot: ${p.best.km2.toFixed(0)} km² (★ on the map). New puzzle tomorrow.</div>` +
+        legend +
         `<button id="daily-share" class="primary">Share result</button><div id="daily-share-msg" class="note"></div></div>`;
     } else if (this.scoring) {
       action = `<button class="primary" disabled>Scoring…</button>`;
@@ -222,9 +236,21 @@ export class DailyGame {
 
     $("daily-guess")?.addEventListener("click", () => this.submitGuess());
     $("daily-share")?.addEventListener("click", () => this.share());
+    $("daily-heat")?.addEventListener("click", () => {
+      this.heatShown = true;
+      this.hooks.hideIsochrone();
+      this.redrawGuesses();
+      this.render();
+    });
     for (const li of el.querySelectorAll<HTMLElement>("li.guess[data-i]")) {
       li.addEventListener("click", () => {
         const g = this.guesses[Number(li.dataset.i)];
+        if (this.done && this.heatShown) {
+          // Show this guess's isochrone instead of the heatmap.
+          this.heatShown = false;
+          this.redrawGuesses();
+          this.render();
+        }
         this.hooks.show(g.lon, g.lat);
       });
     }
@@ -251,7 +277,6 @@ export class DailyGame {
     // main.ts adds its "route" source in the map load handler; wait for that.
     if (this.layersAdded || !this.map.getSource("route")) return;
     this.map.addSource("daily-area", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-    this.map.addSource("daily-grid", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
     this.map.addLayer({
       id: "daily-area-fill", type: "fill", source: "daily-area",
       paint: { "fill-color": "#2563eb", "fill-opacity": 0.04 },
@@ -260,24 +285,40 @@ export class DailyGame {
       id: "daily-area-line", type: "line", source: "daily-area",
       paint: { "line-color": "#2563eb", "line-width": 2, "line-dasharray": [2, 1.5] },
     });
-    this.map.addLayer({
-      id: "daily-grid", type: "circle", source: "daily-grid",
-      paint: {
-        "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 3, 15, 10],
-        "circle-color": ["interpolate", ["linear"], ["get", "pct"], 40, "#dc2626", 70, "#f97316", 85, "#eab308", 100, "#16a34a"],
-        "circle-opacity": 0.75,
-        "circle-stroke-width": 0.5,
-        "circle-stroke-color": "#ffffff",
-      },
-    });
     this.layersAdded = true;
   }
 
   private setLayerVisibility(visible: boolean) {
     if (!this.layersAdded) return;
-    for (const id of ["daily-area-fill", "daily-area-line", "daily-grid"]) {
+    for (const id of ["daily-area-fill", "daily-area-line"]) {
       this.map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
     }
+    if (!visible) this.setHeatmap(false);
+  }
+
+  /** Smooth heatmap image under the circle outline; rendered once per puzzle. */
+  private heatFor: string | null = null;
+  private setHeatmap(visible: boolean) {
+    if (!this.layersAdded) return;
+    if (!visible || !this.puzzle) {
+      if (this.map.getLayer("daily-heat")) this.map.setLayoutProperty("daily-heat", "visibility", "none");
+      return;
+    }
+    const key = `${this.puzzle.date}:${this.puzzle.name}`;
+    if (this.heatFor !== key) {
+      const { url, coordinates } = renderHeatmap(this.puzzle);
+      const src = this.map.getSource("daily-heat") as maplibregl.ImageSource | undefined;
+      if (src) src.updateImage({ url, coordinates });
+      else {
+        this.map.addSource("daily-heat", { type: "image", url, coordinates });
+        this.map.addLayer({
+          id: "daily-heat", type: "raster", source: "daily-heat",
+          paint: { "raster-opacity": 0.8, "raster-fade-duration": 0, "raster-resampling": "linear" },
+        }, "daily-area-fill");
+      }
+      this.heatFor = key;
+    }
+    this.map.setLayoutProperty("daily-heat", "visibility", "visible");
   }
 
   private drawArea() {
@@ -295,26 +336,18 @@ export class DailyGame {
     this.markers = this.guesses.map((g, i) => {
       const el = document.createElement("div");
       el.className = "guess-marker";
-      el.style.background = TILE_COLORS[tile(this.pct(g))];
       el.textContent = String(i + 1);
       return new maplibregl.Marker({ element: el }).setLngLat([g.lon, g.lat]).addTo(this.map);
     });
 
     // Reveal the answer and the area's heatmap once the game is over.
     const p = this.puzzle!;
-    const grid = this.map.getSource("daily-grid") as maplibregl.GeoJSONSource | undefined;
     if (this.done) {
       this.bestMarker.setLngLat([p.best.lon, p.best.lat]).addTo(this.map);
-      grid?.setData({
-        type: "FeatureCollection",
-        features: p.grid.map(([lon, lat, km2]) => ({
-          type: "Feature", properties: { pct: pctOfBest(km2, p) },
-          geometry: { type: "Point", coordinates: [lon, lat] },
-        })),
-      });
+      this.setHeatmap(this.heatShown);
     } else {
       this.bestMarker.remove();
-      grid?.setData({ type: "FeatureCollection", features: [] });
+      this.setHeatmap(false);
     }
   }
 
